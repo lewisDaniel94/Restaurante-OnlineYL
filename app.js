@@ -1,6 +1,6 @@
 // --- CONFIGURACIÓN DE TU NEGOCIO ---
 // Reemplaza este número con tu número de WhatsApp real (incluyendo código de país, sin signos + ni espacios)
-const WHATSAPP_NUMBER = "584121234567"; 
+const WHATSAPP_NUMBER = "584126613818"; 
 
 // --- BASE DE DATOS DE PRODUCTOS ---
 const products = [
