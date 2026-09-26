@@ -1,5 +1,4 @@
 // --- CONFIGURACIÓN DE TU NEGOCIO ---
-// Reemplaza este número con tu número de WhatsApp real (incluyendo código de país, sin signos + ni espacios)
 const WHATSAPP_NUMBER = "584126613818"; 
 
 // --- BASE DE DATOS DE PRODUCTOS ---
@@ -72,6 +71,7 @@ const products = [
 
 // --- ESTADO DEL CARRITO ---
 let cart = [];
+let currentOrderData = null; // Guardar datos temporalmente para el pago
 
 // --- ELEMENTOS DEL DOM ---
 const productGrid = document.getElementById('productGrid');
@@ -85,6 +85,13 @@ const cartTotal = document.getElementById('cartTotal');
 const searchInput = document.getElementById('searchInput');
 const categoryButtons = document.querySelectorAll('.category-btn');
 const checkoutForm = document.getElementById('checkoutForm');
+const actionButtonsContainer = document.getElementById('actionButtonsContainer');
+
+// Modal Elements
+const bankModal = document.getElementById('bankModal');
+const closeBankModal = document.getElementById('closeBankModal');
+const modalTotalAmount = document.getElementById('modalTotalAmount');
+const paymentRefForm = document.getElementById('paymentRefForm');
 
 // --- INICIALIZAR LA APLICACIÓN ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -92,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
 });
 
-// --- RENDERIZAR PRODUCTOS EN PANTALLA ---
+// --- RENDERIZAR PRODUCTOS ---
 function displayProducts(productsToDisplay) {
     productGrid.innerHTML = '';
 
@@ -137,12 +144,10 @@ function displayProducts(productsToDisplay) {
 
 // --- CONFIGURAR EVENTOS ---
 function setupEventListeners() {
-    // Abrir y cerrar carrito
     openCartBtn.addEventListener('click', toggleCart);
     closeCartBtn.addEventListener('click', toggleCart);
     cartOverlay.addEventListener('click', toggleCart);
 
-    // Filtrar por categorías
     categoryButtons.forEach(button => {
         button.addEventListener('click', (e) => {
             categoryButtons.forEach(btn => btn.classList.remove('active', 'bg-amber-500', 'text-slate-900'));
@@ -161,7 +166,6 @@ function setupEventListeners() {
         });
     });
 
-    // Buscador en tiempo real
     searchInput.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase();
         const filtered = products.filter(p => 
@@ -170,19 +174,28 @@ function setupEventListeners() {
         displayProducts(filtered);
     });
 
-    // Enviar pedido por WhatsApp
+    // Paso 1: Enviar pedido y revelar botón de Pagar
     checkoutForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        sendOrderToWhatsApp();
+        processOrderAndShowPayButton();
+    });
+
+    // Cerrar modal de banco
+    closeBankModal.addEventListener('click', () => {
+        bankModal.classList.add('hidden');
+    });
+
+    // Paso 2: Enviar pago por WhatsApp con referencia
+    paymentRefForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        sendPaymentProofToWhatsApp();
     });
 }
 
-// --- ABRIR / CERRAR CARRITO ---
 function toggleCart() {
     cartDrawer.classList.toggle('hidden');
 }
 
-// --- AGREGAR PRODUCTO AL CARRITO ---
 function addToCart(productId) {
     const product = products.find(p => p.id === productId);
     const existingItem = cart.find(item => item.id === productId);
@@ -194,34 +207,32 @@ function addToCart(productId) {
     }
 
     updateCartUI();
-    
-    // Abrir el carrito automáticamente al agregar un producto (opcional, da gran experiencia de usuario)
     if(cartDrawer.classList.contains('hidden')) {
         toggleCart();
     }
 }
 
-// --- CAMBIAR CANTIDAD EN EL CARRITO ---
 function changeQuantity(productId, change) {
     const itemIndex = cart.findIndex(item => item.id === productId);
     if (itemIndex > -1) {
         cart[itemIndex].quantity += change;
         if (cart[itemIndex].quantity <= 0) {
             cart.splice(itemIndex, 1);
+            // Si vaciamos el carrito, restablecemos los botones
+            resetCheckoutButtons();
         }
     }
     updateCartUI();
 }
 
-// --- ACTUALIZAR LA VISTA DEL CARRITO ---
 function updateCartUI() {
-    // Actualizar contador flotante
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
     cartCount.textContent = totalItems;
 
     if (cart.length === 0) {
         cartItemsContainer.innerHTML = `<p class="text-center text-slate-400 py-8">Tu carrito está vacío</p>`;
         cartTotal.textContent = "$0.00";
+        resetCheckoutButtons();
         return;
     }
 
@@ -251,8 +262,8 @@ function updateCartUI() {
     cartTotal.textContent = `$${totalPrice.toFixed(2)}`;
 }
 
-// --- ENVIAR PEDIDO A WHATSAPP ---
-function sendOrderToWhatsApp() {
+// --- PASO 1: ENVIAR PEDIDO Y MOSTRAR BOTÓN "PAGAR" ---
+function processOrderAndShowPayButton() {
     if (cart.length === 0) {
         alert("Tu carrito está vacío.");
         return;
@@ -263,7 +274,13 @@ function sendOrderToWhatsApp() {
     const payment = document.getElementById('clientPayment').value;
     const notes = document.getElementById('clientNotes').value.trim();
 
-    let message = `*¡Hola! Quiero hacer un nuevo pedido 🍔*
+    let total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    // Guardar datos temporalmente
+    currentOrderData = { name, address, payment, notes, total };
+
+    // 1. Enviar el pedido por WhatsApp
+    let message = `*¡Hola! Acabo de hacer un pedido 🍔*
 
 `;
     message += `👤 *Cliente:* ${name}
@@ -272,20 +289,16 @@ function sendOrderToWhatsApp() {
 `;
     message += `💳 *Método de Pago:* ${payment}
 `;
-    if (notes) {
-        message += `📝 *Notas:* ${notes}
+    if (notes) message += `📝 *Notas:* ${notes}
 `;
-    }
     message += `
 -----------------------------------
 `;
     message += `📋 *DETALLE DEL PEDIDO:*
 `;
 
-    let total = 0;
     cart.forEach(item => {
         const subtotal = item.price * item.quantity;
-        total += subtotal;
         message += `• ${item.quantity}x ${item.name} - $${subtotal.toFixed(2)}
 `;
     });
@@ -295,12 +308,69 @@ function sendOrderToWhatsApp() {
     message += `💰 *TOTAL A PAGAR: $${total.toFixed(2)}*
 
 `;
-    message += `¡Quedo atento a la confirmación de mi pedido!`;
+    message += `(Pedido enviado, procederé a registrar el pago).`;
 
-    // Codificar el mensaje para URL de WhatsApp
     const encodedMessage = encodeURIComponent(message);
-    const whatsappURL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodedMessage}`;
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodedMessage}`, '_blank');
 
-    // Abrir WhatsApp en una nueva pestaña
-    window.open(whatsappURL, '_blank');
+    // 2. Transformar el botón de envío en el botón "Pagar"
+    actionButtonsContainer.innerHTML = `
+        <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl text-xs mb-2">
+            <i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> ¡Pedido enviado por WhatsApp con éxito!
+        </div>
+        <button type="button" onclick="openBankDetailsModal()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition shadow-lg">
+            <i class="fa-solid fa-credit-card text-lg"></i>
+            <span>Pagar (Ver Datos Bancarios)</span>
+        </button>
+    `;
+}
+
+// Restablecer botones si se vacía el carrito
+function resetCheckoutButtons() {
+    actionButtonsContainer.innerHTML = `
+        <button type="submit" id="sendOrderBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition shadow-lg">
+            <i class="fa-brands fa-whatsapp text-xl"></i>
+            <span>1. Enviar Pedido por WhatsApp</span>
+        </button>
+    `;
+}
+
+// --- ABRIR MODAL CON DATOS BANCARIOS ---
+function openBankDetailsModal() {
+    if (!currentOrderData) return;
+    modalTotalAmount.textContent = `$${currentOrderData.total.toFixed(2)}`;
+    bankModal.classList.remove('hidden');
+}
+
+// --- PASO 2: ENVIAR COMPROBANTE/PAGO POR WHATSAPP ---
+function sendPaymentProofToWhatsApp() {
+    const paymentRef = document.getElementById('paymentRef').value.trim();
+    if (!paymentRef) {
+        alert("Por favor ingresa los datos de la referencia de pago.");
+        return;
+    }
+
+    let message = `*¡Comprobante de Pago Enviado! 🧾*
+
+`;
+    message += `👤 *Cliente:* ${currentOrderData.name}
+`;
+    message += `💰 *Monto Pagado:* $${currentOrderData.total.toFixed(2)}
+`;
+    message += `🔢 *Referencia / Teléfono:* ${paymentRef}
+`;
+    message += `🏦 *Banco:* Banco Mercantil (Pago Móvil)
+
+`;
+    message += `¡Quedo a la espera de la verificación de mi pago y entrega!`;
+
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodedMessage}`, '_blank');
+
+    // Cerrar modal y limpiar
+    bankModal.classList.add('hidden');
+    cart = [];
+    updateCartUI();
+    toggleCart();
+    alert("¡Pago reportado con éxito! Gracias por tu compra.");
 }

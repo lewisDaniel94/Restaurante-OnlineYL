@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sabor  de Lewis - Tienda Online</title>
-    <!-- Tailwind CSS CDN para estilos rápidos y modernos -->
+    <title>Sabor de Lewis -Restaurante Online</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome para iconos -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -18,7 +18,7 @@
         <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
             <div class="flex items-center space-x-3">
                 <i class="fa-solid fa-utensils text-amber-400 text-2xl"></i>
-                <h1 class="text-xl font-bold tracking-wide">El Sabor de Lewis </h1>
+                <h1 class="text-xl font-bold tracking-wide">El Sabor de Lewis</h1>
             </div>
             <!-- Botón del Carrito -->
             <button id="openCartBtn" class="relative bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-4 py-2 rounded-lg flex items-center space-x-2 transition">
@@ -54,13 +54,12 @@
 
         <!-- Cuadrícula de Productos -->
         <div id="productGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            <!-- Los productos se inyectan dinámicamente mediante JavaScript -->
+            <!-- Productos dinámicos -->
         </div>
     </main>
 
     <!-- CARRITO DE COMPRAS / PANEL LATERAL (DRAWER) -->
     <div id="cartDrawer" class="fixed inset-0 z-50 overflow-hidden hidden">
-        <!-- Fondo oscuro semitransparente -->
         <div id="cartOverlay" class="absolute inset-0 bg-black/50 transition-opacity"></div>
 
         <div class="absolute inset-y-0 right-0 max-w-full flex pl-10">
@@ -97,10 +96,10 @@
                             <input type="text" id="clientAddress" required placeholder="Calle, Urbanización, Casa/Apto" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-slate-600 mb-1">Método de Pago</label>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Método de Pago Seleccionado</label>
                             <select id="clientPayment" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white">
-                                <option value="Efectivo">Efectivo (USD / Moneda Local)</option>
                                 <option value="Pago Móvil / Transferencia">Pago Móvil / Transferencia</option>
+                                <option value="Efectivo">Efectivo</option>
                                 <option value="Zelle">Zelle</option>
                             </select>
                         </div>
@@ -109,12 +108,55 @@
                             <input type="text" id="clientNotes" placeholder="Ej. Sin salsa de ajo, por favor" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
                         </div>
 
-                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition shadow-lg mt-2">
-                            <i class="fa-brands fa-whatsapp text-xl"></i>
-                            <span>Enviar Pedido por WhatsApp</span>
-                        </button>
+                        <!-- Botones de Acción secuenciales -->
+                        <div id="actionButtonsContainer" class="space-y-2 mt-3">
+                            <!-- Paso 1: Enviar pedido por WhatsApp -->
+                            <button type="submit" id="sendOrderBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition shadow-lg">
+                                <i class="fa-brands fa-whatsapp text-xl"></i>
+                                <span>1. Enviar Pedido por WhatsApp</span>
+                            </button>
+                        </div>
                     </form>
                 </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE DATOS BANCARIOS Y ENVÍO DE PAGO -->
+    <div id="bankModal" class="fixed inset-0 z-50 overflow-y-auto hidden">
+        <div class="fixed inset-0 bg-black/60 transition-opacity"></div>
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-lg p-6">
+                
+                <div class="flex justify-between items-center pb-3 border-b border-slate-200 mb-4">
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center space-x-2">
+                        <i class="fa-solid fa-building-columns text-amber-500"></i>
+                        <span>Datos Bancarios para Pago Móvil / Transferencia</span>
+                    </h3>
+                    <button id="closeBankModal" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+                </div>
+
+                <!-- Datos del Banco -->
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 mb-4 text-sm">
+                    <p><strong>Banco:</strong> Banco Bancaribe (0104)</p>
+                    <p><strong>Teléfono:</strong> 0412-6613818</p>
+                    <p><strong>Cédula / RIF:</strong> V-21426471</p>
+                    <p><strong>Monto Exacto:</strong> <span id="modalTotalAmount" class="font-bold text-amber-600">$0.00</span></p>
+                </div>
+
+                <!-- Formulario de Referencia de Pago -->
+                <form id="paymentRefForm" class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Últimos 4 dígitos del teléfono o referencia</label>
+                        <input type="text" id="paymentRef" required placeholder="Ej. 4567 o Ref: 987654" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                    </div>
+
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition shadow-lg mt-4">
+                        <i class="fa-brands fa-whatsapp text-xl"></i>
+                        <span>2. Enviar Comprobante / Pago por WhatsApp</span>
+                    </button>
+                </form>
 
             </div>
         </div>

@@ -1,9 +1,8 @@
-/* Estilos adicionales personalizados para la tienda de comida */
+/* Estilos personalizados adicionales */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Transiciones suaves para los botones de categoría */
 .category-btn {
     border: 1px solid #e2e8f0;
 }
@@ -14,7 +13,6 @@ body {
     border-color: #f59e0b !important;
 }
 
-/* Efectos visuales en tarjetas de productos */
 .product-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
