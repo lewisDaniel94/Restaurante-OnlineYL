@@ -256,8 +256,10 @@ function updateCartUI() {
 }
 
 // --- ENVIAR PEDIDO A WHATSAPP ---
+// --- ENVIAR PEDIDO A WHATSAPP ---
 function sendOrderToWhatsApp() {
-    playOrderSound();
+    playOrderSound(); // Sonido de timbre de restaurante
+
     if (cart.length === 0) {
         alert("Tu carrito está vacío.");
         return;
@@ -302,12 +304,37 @@ function sendOrderToWhatsApp() {
 `;
     message += `¡Quedo atento a la confirmación de mi pedido!`;
 
+    // --- CAMBIAR EL ESTADO DEL BOTÓN A "PEDIDO ENVIADO" ---
+    // Buscamos el botón de envío dentro de tu formulario
+    const submitBtn = checkoutForm.querySelector('button[type="submit"]') || document.getElementById('whatsappBtn');
+    
+    if (submitBtn) {
+        // Guardamos el contenido original por si quieres que regrese a la normalidad luego
+        const originalContent = submitBtn.innerHTML;
+        
+        // Cambiamos clases a rojo y texto
+        submitBtn.classList.remove('bg-green-600', 'hover:bg-green-700', 'bg-slate-900', 'hover:bg-slate-800');
+        submitBtn.classList.add('bg-red-600', 'text-white');
+        submitBtn.disabled = true; // Lo desactivamos temporalmente para evitar dobles clics
+        submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>¡Pedido Enviado!</span>`;
+
+        // Opcional: restaurar el botón después de 5 segundos
+        setTimeout(() => {
+            submitBtn.classList.remove('bg-red-600');
+            submitBtn.classList.add('bg-green-600'); // O el color original que usaras
+            submitBtn.innerHTML = originalContent;
+            submitBtn.disabled = false;
+        }, 15000);
+    }
+
     // Codificar el mensaje para URL de WhatsApp
     const encodedMessage = encodeURIComponent(message);
     const whatsappURL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodedMessage}`;
 
-    // Abrir WhatsApp en una nueva pestaña
-    window.open(whatsappURL, '_blank');
+    // Abrir WhatsApp en una nueva pestaña después de un pequeño respiro para que se escuche el audio y cambie el botón
+    setTimeout(() => {
+        window.open(whatsappURL, '_blank');
+    }, 400);
 }
 
 // --- FUNCIÓN DE AUDIO DIGITAL (BEEP) ---
@@ -407,3 +434,41 @@ function closeImageModal() {
     const modal = document.getElementById('imageModal');
     modal.classList.add('hidden');
 }
+// --- VERIFICAR SI EL LOCAL ESTÁ ABIERTO O CERRADO (5:00 PM A 11:00 PM) ---
+function checkStoreStatus() {
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    
+    if (!statusDot || !statusText) return;
+
+    // Obtenemos la hora actual del dispositivo del cliente
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
+    
+    // Convertimos la hora actual a minutos totales del día para comparar con exactitud
+    const currentTimeInMinutes = currentHour * 60 + currentMinutes;
+    
+    // Horario: 5:00 PM (17:00 = 1020 min) a 11:00 PM (23:00 = 1380 min)
+    const openingTime = 17 * 60; // 17:00 -> 1020 minutos
+    const closingTime = 23 * 60; // 23:00 -> 1380 minutos
+
+    const isOpen = currentTimeInMinutes >= openingTime && currentTimeInMinutes < closingTime;
+
+    if (isOpen) {
+        statusDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+        statusText.textContent = "Abierto (Cierra a las 11:00 PM)";
+        statusText.className = "text-emerald-700 font-bold";
+        // Opcional: si está abierto, puedes asegurarte de que el botón de pedido funcione normal
+    } else {
+        statusDot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+        statusText.textContent = "Cerrado (Abre a las 5:00 PM)";
+        statusText.className = "text-red-700 font-bold";
+    }
+}
+
+// Ejecutar la verificación al cargar la página y actualizar cada minuto
+document.addEventListener('DOMContentLoaded', () => {
+    checkStoreStatus();
+    setInterval(checkStoreStatus, 60000); // Revisa cada 1 minuto por si cambia de hora
+});

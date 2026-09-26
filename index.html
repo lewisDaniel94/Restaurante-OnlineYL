@@ -15,18 +15,26 @@
 
     <!-- HEADER / NAVEGACIÓN -->
     <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-md">
+        
         <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            
             <div class="flex items-center space-x-3">
                 <i class="fa-solid fa-utensils text-amber-400 text-2xl"></i>
+                
                 <h1 class="text-xl font-bold tracking-wide">El Sabor de Lewis</h1>
+                
             </div>
+            
             <!-- Botón del Carrito -->
+             
             <button id="openCartBtn" class="relative bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-4 py-2 rounded-lg flex items-center space-x-2 transition">
                 <i class="fa-solid fa-cart-shopping"></i>
                 <span>Pedido</span>
                 <span id="cartCount" class="absolute -top-2 -right-2 bg-red-600 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold shadow">0</span>
             </button>
+            
         </div>
+        
     </header>
 
     <!-- CONTENIDO PRINCIPAL -->
@@ -35,6 +43,11 @@
         <!-- Sección de Bienvenida y Buscador -->
         <div class="text-center mb-8">
             <h2 class="text-3xl font-extrabold text-slate-900 mb-2">Haz tu pedido en línea</h2>
+            <!-- INDICADOR DE ESTADO (ABIERTO / CERRADO) -->
+<div id="storeStatus" class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-bold shadow-sm">
+    <span id="statusDot" class="w-2.5 h-2.5 rounded-full animate-pulse"></span>
+    <span id="statusText">Verificando horario...</span>
+</div>
             <p class="text-slate-600 mb-6">Selecciona tus platillos favoritos y recíbelos directo en casa.</p>
             
             <div class="max-w-md mx-auto relative">
