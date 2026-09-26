@@ -113,8 +113,11 @@ function displayProducts(productsToDisplay) {
         
         card.innerHTML = `
             <div>
-                <div class="h-48 overflow-hidden relative">
-                    <img src="${product.image}" alt="${product.name}" class="w-full h-full object-cover">
+                <div class="h-48 overflow-hidden relative cursor-pointer group" onclick="openImageModal('${product.image}', '${product.name}')">
+                    <img src="${product.image}" alt="${product.name}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                    <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white font-semibold text-sm">
+                        <i class="fa-solid fa-magnifying-glass-plus text-2xl"></i>
+                    </div>
                     <span class="absolute top-3 right-3 bg-amber-500 text-slate-900 text-xs font-bold px-3 py-1 rounded-full uppercase shadow">
                         ${product.category}
                     </span>
@@ -387,4 +390,20 @@ function playOrderSound() {
     } catch (e) {
         console.log("Audio bloqueado.", e);
     }
+}
+// --- ABRIR MODAL DE IMAGEN ---
+function openImageModal(imageSrc, productName) {
+    const modal = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
+    const modalTitle = document.getElementById('modalTitle');
+
+    modalImage.src = imageSrc;
+    modalTitle.textContent = productName;
+    modal.classList.remove('hidden');
+}
+
+// --- CERRAR MODAL DE IMAGEN ---
+function closeImageModal() {
+    const modal = document.getElementById('imageModal');
+    modal.classList.add('hidden');
 }
