@@ -10,7 +10,8 @@ const products = [
         category: "hamburguesas",
         price: 8.99,
         description: "Carne 100% de res, queso cheddar fundido, lechuga, tomate y salsa especial de la casa.",
-        image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=500&q=80"
+        image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRWjVJXuQhhCwwvg049KMbTOXWiiLvKJyVuaIZ4uqK_e5igHDSH7C_3_AU&s=10"
+        
     },
     {
         id: 2,
@@ -253,6 +254,7 @@ function updateCartUI() {
 
 // --- ENVIAR PEDIDO A WHATSAPP ---
 function sendOrderToWhatsApp() {
+    playOrderSound();
     if (cart.length === 0) {
         alert("Tu carrito está vacío.");
         return;
@@ -303,4 +305,86 @@ function sendOrderToWhatsApp() {
 
     // Abrir WhatsApp en una nueva pestaña
     window.open(whatsappURL, '_blank');
+}
+
+// --- FUNCIÓN DE AUDIO DIGITAL (BEEP) ---
+function playBeepSound() {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        oscillator.type = 'sine'; 
+        oscillator.frequency.setValueAtTime(587.33, ctx.currentTime);
+        
+        gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.15);
+    } catch (e) {
+        console.log("Audio bloqueado temporalmente hasta la interacción del usuario.", e);
+    }
+}
+
+// --- AGREGAR PRODUCTO AL CARRITO ---
+function addToCart(productId) {
+    playBeepSound(); // <--- ¡Coloca solo esta línea aquí!
+
+    const product = products.find(p => p.id === productId);
+    const existingItem = cart.find(item => item.id === productId);
+
+    if (existingItem) {
+        existingItem.quantity++;
+    } else {
+        cart.push({ ...product, quantity: 1 });
+    }
+
+    updateCartUI();
+    
+    if(cartDrawer.classList.contains('hidden')) {
+        toggleCart();
+    }
+}
+// --- FUNCIÓN DE SONIDO LLAMATIVO (TIMBRE DE PEDIDO LISTO) ---
+function playOrderSound() {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+        
+        // Primer "Ding" de la campana
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(1567.98, ctx.currentTime); // Nota aguda (G6)
+        gain1.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start();
+        osc1.stop(ctx.currentTime + 0.4);
+
+        // Segundo "Ding" (con un poco más de eco)
+        setTimeout(() => {
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(1567.98, ctx.currentTime); 
+            gain2.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+            
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.start();
+            osc2.stop(ctx.currentTime + 0.8);
+        }, 150); // Suena 150 milisegundos después del primero
+        
+    } catch (e) {
+        console.log("Audio bloqueado.", e);
+    }
 }
