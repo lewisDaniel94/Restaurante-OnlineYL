@@ -71,8 +71,17 @@ const products = [
     }
 ];
 
-// --- ESTADO DEL CARRITO ---
+// --- ESTADO DEL CARRITO Y PEDIDO ---
 let cart = [];
+let currentSelectedProduct = null;
+let currentModalQty = 1;
+let deliveryType = 'pickup'; // 'pickup' por defecto[cite: 11]
+
+// --- VARIABLES PARA EL MAPA (LEAFLET) ---
+let map = null;
+let marker = null;
+let selectedLat = 10.1500; // Coordenadas de referencia o por defecto (puedes ajustarlas)
+let selectedLng = -67.4167;
 
 // --- ELEMENTOS DEL DOM ---
 const productGrid = document.getElementById('productGrid');
@@ -91,6 +100,8 @@ const checkoutForm = document.getElementById('checkoutForm');
 document.addEventListener('DOMContentLoaded', () => {
     displayProducts(products);
     setupEventListeners();
+    checkStoreStatus();
+    setInterval(checkStoreStatus, 60000);
 });
 
 // --- RENDERIZAR PRODUCTOS EN PANTALLA ---
@@ -129,7 +140,7 @@ function displayProducts(productsToDisplay) {
             </div>
             <div class="px-5 pb-5 flex items-center justify-between">
                 <span class="text-xl font-extrabold text-amber-600">$${product.price.toFixed(2)}</span>
-                <button onclick="addToCart(${product.id})" class="bg-slate-900 hover:bg-slate-800 text-white font-medium px-4 py-2 rounded-xl text-sm flex items-center space-x-2 transition shadow">
+                <button onclick="openProductModal(${product.id})" class="bg-slate-900 hover:bg-slate-800 text-white font-medium px-4 py-2 rounded-xl text-sm flex items-center space-x-2 transition shadow">
                     <i class="fa-solid fa-cart-plus"></i>
                     <span>Agregar</span>
                 </button>
@@ -174,6 +185,22 @@ function setupEventListeners() {
         displayProducts(filtered);
     });
 
+    // Mostrar u ocultar datos de pago móvil según la selección
+    const clientPaymentSelect = document.getElementById('clientPayment');
+    const paymentDetailsContainer = document.getElementById('paymentDetailsContainer');
+
+    if (clientPaymentSelect && paymentDetailsContainer) {
+        clientPaymentSelect.addEventListener('change', (e) => {
+            if (e.target.value === 'Pago Móvil / Transferencia') {
+                paymentDetailsContainer.classList.remove('hidden');
+            } else {
+                paymentDetailsContainer.classList.add('hidden');
+                const clientRefInput = document.getElementById('clientRef');
+                if (clientRefInput) clientRefInput.value = '';
+            }
+        });
+    }
+
     // Enviar pedido por WhatsApp
     checkoutForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -186,28 +213,157 @@ function toggleCart() {
     cartDrawer.classList.toggle('hidden');
 }
 
-// --- AGREGAR PRODUCTO AL CARRITO ---
-function addToCart(productId) {
-    const product = products.find(p => p.id === productId);
-    const existingItem = cart.find(item => item.id === productId);
-
-    if (existingItem) {
-        existingItem.quantity++;
-    } else {
-        cart.push({ ...product, quantity: 1 });
+// --- CONTROL DE VENTANA MODAL DE CHECKOUT ---
+function openCheckoutModal() {
+    if (cart.length === 0) {
+        alert("Tu carrito está vacío.");
+        return;
     }
+    // Sincronizar el total con el modal de checkout
+    document.getElementById('checkoutModalTotal').textContent = cartTotal.textContent;
+    document.getElementById('checkoutModal').classList.remove('hidden');
+    // Cerrar el panel lateral del carrito
+    toggleCart();
+}
 
-    updateCartUI();
-    
-    // Abrir el carrito automáticamente al agregar un producto (opcional, da gran experiencia de usuario)
-    if(cartDrawer.classList.contains('hidden')) {
-        toggleCart();
+function closeCheckoutModal() {
+    document.getElementById('checkoutModal').classList.add('hidden');
+}
+
+// --- GESTIÓN DE TIPO DE ENTREGA (PICK UP / DELIVERY) Y MAPA ---
+function setDeliveryType(type) {
+    deliveryType = type;
+    const btnPickup = document.getElementById('btnPickup');
+    const btnDelivery = document.getElementById('btnDelivery');
+    const deliveryContainer = document.getElementById('deliveryContainer');
+
+    if (type === 'pickup') {
+        // Estilo botón Pick Up activo
+        btnPickup.className = "py-2.5 px-4 rounded-xl font-bold text-sm border-2 transition flex items-center justify-center space-x-2 bg-amber-500 text-slate-900 border-amber-500 shadow-sm";
+        // Estilo botón Delivery inactivo
+        btnDelivery.className = "py-2.5 px-4 rounded-xl font-bold text-sm border-2 transition flex items-center justify-center space-x-2 bg-white text-slate-600 border-slate-200 hover:bg-slate-50 shadow-sm";
+        
+        // Ocultar contenedor de dirección y mapa
+        deliveryContainer.classList.add('hidden');
+        document.getElementById('clientAddress').removeAttribute('required');
+    } else {
+        // Estilo botón Delivery activo
+        btnDelivery.className = "py-2.5 px-4 rounded-xl font-bold text-sm border-2 transition flex items-center justify-center space-x-2 bg-amber-500 text-slate-900 border-amber-500 shadow-sm";
+        // Estilo botón Pick Up inactivo
+        btnPickup.className = "py-2.5 px-4 rounded-xl font-bold text-sm border-2 transition flex items-center justify-center space-x-2 bg-white text-slate-600 border-slate-200 hover:bg-slate-50 shadow-sm";
+        
+        // Mostrar contenedor de dirección y mapa
+        deliveryContainer.classList.remove('hidden');
+        document.getElementById('clientAddress').setAttribute('required', 'true');
+
+        // Inicializar mapa de Leaflet si no se ha creado aún
+        setTimeout(() => {
+            initMap();
+        }, 200);
     }
 }
 
+function initMap() {
+    if (map) {
+        map.invalidateSize();
+        return;
+    }
+
+    try {
+        map = L.map('map').setView([selectedLat, selectedLng], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        marker = L.marker([selectedLat, selectedLng], { draggable: true }).addTo(map);
+
+        marker.on('dragend', function (e) {
+            const position = marker.getLatLng();
+            selectedLat = position.lat;
+            selectedLng = position.lng;
+        });
+
+        // Intentar obtener geolocalización del usuario si el navegador lo permite
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+                selectedLat = position.coords.latitude;
+                selectedLng = position.coords.longitude;
+                map.setView([selectedLat, selectedLng], 16);
+                marker.setLatLng([selectedLat, selectedLng]);
+            }, () => {
+                console.log("Geolocalización no disponible o denegada.");
+            });
+        }
+    } catch (error) {
+        console.error("Error al inicializar Leaflet:", error);
+    }
+}
+
+// --- MODAL DE PRODUCTO (PERSONALIZACIÓN, NOTAS Y CANTIDAD) ---
+function openProductModal(productId) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    currentSelectedProduct = product;
+    currentModalQty = 1; // Reiniciar cantidad a 1
+
+    document.getElementById('modalProductImg').src = product.image;
+    document.getElementById('modalProductName').textContent = product.name;
+    document.getElementById('modalProductPrice').textContent = `$${product.price.toFixed(2)}`;
+    document.getElementById('modalProductDesc').textContent = product.description || '';
+    document.getElementById('modalProductNotes').value = ''; // Limpiar notas previas
+    document.getElementById('modalProductQty').textContent = currentModalQty;
+
+    document.getElementById('productModal').classList.remove('hidden');
+}
+
+function closeProductModal() {
+    document.getElementById('productModal').classList.add('hidden');
+    currentSelectedProduct = null;
+}
+
+function adjustModalQuantity(change) {
+    currentModalQty += change;
+    if (currentModalQty < 1) {
+        currentModalQty = 1;
+    }
+    document.getElementById('modalProductQty').textContent = currentModalQty;
+}
+
+function confirmAddToCart() {
+    if (!currentSelectedProduct) return;
+
+    playBeepSound(); // Suena el bip de confirmación
+
+    const notes = document.getElementById('modalProductNotes').value.trim();
+    
+    // Crear ID único combinando producto y notas para agrupar o separar según instrucciones
+    const cartItemId = `${currentSelectedProduct.id}-${notes}`;
+    
+    const existingItem = cart.find(item => item.cartItemId === cartItemId);
+
+    if (existingItem) {
+        existingItem.quantity += currentModalQty;
+    } else {
+        cart.push({
+            cartItemId: cartItemId,
+            id: currentSelectedProduct.id,
+            name: currentSelectedProduct.name,
+            price: currentSelectedProduct.price,
+            quantity: currentModalQty,
+            notes: notes
+        });
+    }
+
+    updateCartUI();
+    closeProductModal();
+}
+
 // --- CAMBIAR CANTIDAD EN EL CARRITO ---
-function changeQuantity(productId, change) {
-    const itemIndex = cart.findIndex(item => item.id === productId);
+function changeQuantity(cartItemId, change) {
+    const itemIndex = cart.findIndex(item => item.cartItemId === cartItemId);
     if (itemIndex > -1) {
         cart[itemIndex].quantity += change;
         if (cart[itemIndex].quantity <= 0) {
@@ -219,7 +375,6 @@ function changeQuantity(productId, change) {
 
 // --- ACTUALIZAR LA VISTA DEL CARRITO ---
 function updateCartUI() {
-    // Actualizar contador flotante
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
     cartCount.textContent = totalItems;
 
@@ -237,16 +392,17 @@ function updateCartUI() {
         totalPrice += itemTotal;
 
         const div = document.createElement('div');
-        div.className = 'py-3 flex items-center justify-between';
+        div.className = 'py-3 flex items-center justify-between border-b border-slate-100 last:border-0';
         div.innerHTML = `
             <div class="flex-1 pr-2">
                 <h4 class="font-bold text-sm text-slate-900">${item.name}</h4>
                 <p class="text-xs text-amber-600 font-semibold">$${item.price.toFixed(2)} c/u</p>
+                ${item.notes ? `<p class="text-xs text-slate-500 italic mt-0.5">Nota: ${item.notes}</p>` : ''}
             </div>
             <div class="flex items-center space-x-2">
-                <button onclick="changeQuantity(${item.id}, -1)" class="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center font-bold text-slate-700 transition">-</button>
+                <button type="button" onclick="changeQuantity('${item.cartItemId}', -1)" class="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center font-bold text-slate-700 transition">-</button>
                 <span class="text-sm font-bold w-5 text-center">${item.quantity}</span>
-                <button onclick="changeQuantity(${item.id}, 1)" class="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center font-bold text-slate-700 transition">+</button>
+                <button type="button" onclick="changeQuantity('${item.cartItemId}', 1)" class="w-7 h-7 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-center font-bold text-slate-700 transition">+</button>
             </div>
         `;
         cartItemsContainer.appendChild(div);
@@ -255,7 +411,20 @@ function updateCartUI() {
     cartTotal.textContent = `$${totalPrice.toFixed(2)}`;
 }
 
-// --- ENVIAR PEDIDO A WHATSAPP ---
+// --- CONTROL DE VENTANA MODAL DE PAGO MÓVIL ---
+function openPaymentModal() {
+    const modal = document.getElementById('paymentModal');
+    const modalTotalAmount = document.getElementById('modalTotalAmount');
+    
+    modalTotalAmount.textContent = cartTotal.textContent;
+    modal.classList.remove('hidden');
+}
+
+function closePaymentModal() {
+    const modal = document.getElementById('paymentModal');
+    modal.classList.add('hidden');
+}
+
 // --- ENVIAR PEDIDO A WHATSAPP ---
 function sendOrderToWhatsApp() {
     playOrderSound(); // Sonido de timbre de restaurante
@@ -266,74 +435,72 @@ function sendOrderToWhatsApp() {
     }
 
     const name = document.getElementById('clientName').value.trim();
-    const address = document.getElementById('clientAddress').value.trim();
     const payment = document.getElementById('clientPayment').value;
+    const clientRefInput = document.getElementById('clientRef');
+    const clientRef = clientRefInput ? clientRefInput.value.trim() : '';
     const notes = document.getElementById('clientNotes').value.trim();
 
-    let message = `*¡Hola! Quiero hacer un nuevo pedido 🍔*
+    let message = `*¡Hola! Quiero hacer un nuevo pedido 🍔*\n\n`;
+    message += `👤 *Cliente:* ${name}\n`;
+    message += `🛍️ *Tipo de Entrega:* ${deliveryType === 'pickup' ? 'Pick Up (Retiro en local)' : 'Delivery (Envío a domicilio)'}\n`;
 
-`;
-    message += `👤 *Cliente:* ${name}
-`;
-    message += `📍 *Dirección:* ${address}
-`;
-    message += `💳 *Método de Pago:* ${payment}
-`;
-    if (notes) {
-        message += `📝 *Notas:* ${notes}
-`;
+    if (deliveryType === 'delivery') {
+        const address = document.getElementById('clientAddress').value.trim();
+        message += `📍 *Dirección:* ${address}\n`;
+        message += `🗺️ *Ubicación GPS:* https://maps.google.com/?q=${selectedLat},${selectedLng}\n`;
     }
-    message += `
------------------------------------
-`;
-    message += `📋 *DETALLE DEL PEDIDO:*
-`;
+
+    message += `💳 *Método de Pago:* ${payment}\n`;
+    
+    if (payment === 'Pago Móvil / Transferencia' && clientRef) {
+        message += `🔢 *Últimos 4 dígitos:* ${clientRef}\n`;
+    }
+    
+    if (notes) {
+        message += `📝 *Notas generales:* ${notes}\n`;
+    }
+    message += `\n-----------------------------------\n`;
+    message += `📋 *DETALLE DEL PEDIDO:*\n`;
 
     let total = 0;
     cart.forEach(item => {
         const subtotal = item.price * item.quantity;
         total += subtotal;
-        message += `• ${item.quantity}x ${item.name} - $${subtotal.toFixed(2)}
-`;
+        message += `• ${item.quantity}x ${item.name} - $${subtotal.toFixed(2)}`;
+        if (item.notes) {
+            message += `\n   _Instrucción: ${item.notes}_`;
+        }
+        message += `\n`;
     });
 
-    message += `-----------------------------------
-`;
-    message += `💰 *TOTAL A PAGAR: $${total.toFixed(2)}*
-
-`;
+    message += `-----------------------------------\n`;
+    message += `💰 *TOTAL A PAGAR: $${total.toFixed(2)}*\n\n`;
     message += `¡Quedo atento a la confirmación de mi pedido!`;
 
-    // --- CAMBIAR EL ESTADO DEL BOTÓN A "PEDIDO ENVIADO" ---
-    // Buscamos el botón de envío dentro de tu formulario
-    const submitBtn = checkoutForm.querySelector('button[type="submit"]') || document.getElementById('whatsappBtn');
+    const submitBtn = checkoutForm.querySelector('button[type="submit"]');
     
     if (submitBtn) {
-        // Guardamos el contenido original por si quieres que regrese a la normalidad luego
         const originalContent = submitBtn.innerHTML;
         
-        // Cambiamos clases a rojo y texto
-        submitBtn.classList.remove('bg-green-600', 'hover:bg-green-700', 'bg-slate-900', 'hover:bg-slate-800');
+        submitBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
         submitBtn.classList.add('bg-red-600', 'text-white');
-        submitBtn.disabled = true; // Lo desactivamos temporalmente para evitar dobles clics
+        submitBtn.disabled = true;
         submitBtn.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>¡Pedido Enviado!</span>`;
 
-        // Opcional: restaurar el botón después de 5 segundos
         setTimeout(() => {
             submitBtn.classList.remove('bg-red-600');
-            submitBtn.classList.add('bg-green-600'); // O el color original que usaras
+            submitBtn.classList.add('bg-emerald-600');
             submitBtn.innerHTML = originalContent;
             submitBtn.disabled = false;
-        }, 15000);
+        }, 30000);
     }
 
-    // Codificar el mensaje para URL de WhatsApp
     const encodedMessage = encodeURIComponent(message);
     const whatsappURL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodedMessage}`;
 
-    // Abrir WhatsApp en una nueva pestaña después de un pequeño respiro para que se escuche el audio y cambie el botón
     setTimeout(() => {
         window.open(whatsappURL, '_blank');
+        closeCheckoutModal(); // Cierra el modal de checkout al enviar
     }, 400);
 }
 
@@ -361,36 +528,16 @@ function playBeepSound() {
     }
 }
 
-// --- AGREGAR PRODUCTO AL CARRITO ---
-function addToCart(productId) {
-    playBeepSound(); // <--- ¡Coloca solo esta línea aquí!
-
-    const product = products.find(p => p.id === productId);
-    const existingItem = cart.find(item => item.id === productId);
-
-    if (existingItem) {
-        existingItem.quantity++;
-    } else {
-        cart.push({ ...product, quantity: 1 });
-    }
-
-    updateCartUI();
-    
-    if(cartDrawer.classList.contains('hidden')) {
-        toggleCart();
-    }
-}
 // --- FUNCIÓN DE SONIDO LLAMATIVO (TIMBRE DE PEDIDO LISTO) ---
 function playOrderSound() {
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const ctx = new AudioContext();
         
-        // Primer "Ding" de la campana
         const osc1 = ctx.createOscillator();
         const gain1 = ctx.createGain();
         osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(1567.98, ctx.currentTime); // Nota aguda (G6)
+        osc1.frequency.setValueAtTime(1567.98, ctx.currentTime);
         gain1.gain.setValueAtTime(0.3, ctx.currentTime);
         gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
         
@@ -399,7 +546,6 @@ function playOrderSound() {
         osc1.start();
         osc1.stop(ctx.currentTime + 0.4);
 
-        // Segundo "Ding" (con un poco más de eco)
         setTimeout(() => {
             const osc2 = ctx.createOscillator();
             const gain2 = ctx.createGain();
@@ -412,12 +558,13 @@ function playOrderSound() {
             gain2.connect(ctx.destination);
             osc2.start();
             osc2.stop(ctx.currentTime + 0.8);
-        }, 150); // Suena 150 milisegundos después del primero
+        }, 150);
         
     } catch (e) {
         console.log("Audio bloqueado.", e);
     }
 }
+
 // --- ABRIR MODAL DE IMAGEN ---
 function openImageModal(imageSrc, productName) {
     const modal = document.getElementById('imageModal');
@@ -434,6 +581,7 @@ function closeImageModal() {
     const modal = document.getElementById('imageModal');
     modal.classList.add('hidden');
 }
+
 // --- VERIFICAR SI EL LOCAL ESTÁ ABIERTO O CERRADO (5:00 PM A 11:00 PM) ---
 function checkStoreStatus() {
     const statusDot = document.getElementById('statusDot');
@@ -441,17 +589,14 @@ function checkStoreStatus() {
     
     if (!statusDot || !statusText) return;
 
-    // Obtenemos la hora actual del dispositivo del cliente
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinutes = now.getMinutes();
     
-    // Convertimos la hora actual a minutos totales del día para comparar con exactitud
     const currentTimeInMinutes = currentHour * 60 + currentMinutes;
     
-    // Horario: 5:00 PM (17:00 = 1020 min) a 11:00 PM (23:00 = 1380 min)
-    const openingTime = 17 * 60; // 17:00 -> 1020 minutos
-    const closingTime = 23 * 60; // 23:00 -> 1380 minutos
+    const openingTime = 17 * 60; 
+    const closingTime = 23 * 60; 
 
     const isOpen = currentTimeInMinutes >= openingTime && currentTimeInMinutes < closingTime;
 
@@ -459,16 +604,28 @@ function checkStoreStatus() {
         statusDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
         statusText.textContent = "Abierto (Cierra a las 11:00 PM)";
         statusText.className = "text-emerald-700 font-bold";
-        // Opcional: si está abierto, puedes asegurarte de que el botón de pedido funcione normal
     } else {
         statusDot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
         statusText.textContent = "Cerrado (Abre a las 5:00 PM)";
         statusText.className = "text-red-700 font-bold";
     }
 }
+// --- FUNCIÓN PARA COPIAR DATOS AL PORTAPAPELES ---
+function copyToClipboard(elementId, btnElement) {
+    const textToCopy = document.getElementById(elementId).innerText;
 
-// Ejecutar la verificación al cargar la página y actualizar cada minuto
-document.addEventListener('DOMContentLoaded', () => {
-    checkStoreStatus();
-    setInterval(checkStoreStatus, 60000); // Revisa cada 1 minuto por si cambia de hora
-});
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        // Cambiar icono temporalmente a un Check para indicar éxito
+        const originalHTML = btnElement.innerHTML;
+        btnElement.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i>`;
+        btnElement.classList.add('border-emerald-400', 'bg-emerald-50');
+
+        setTimeout(() => {
+            btnElement.innerHTML = originalHTML;
+            btnElement.classList.remove('border-emerald-400', 'bg-emerald-50');
+        }, 2000);
+    }).catch(err => {
+        console.error('Error al copiar al portapapeles: ', err);
+        alert('No se pudo copiar el texto automáticamente.');
+    });
+}
