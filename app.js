@@ -1,5 +1,4 @@
 // --- CONFIGURACIÓN DE TU NEGOCIO ---
-// Reemplaza este número con tu número de WhatsApp real (incluyendo código de país, sin signos + ni espacios)
 const WHATSAPP_NUMBER = "584126613818"; 
 
 // --- BASE DE DATOS DE PRODUCTOS ---
@@ -11,7 +10,6 @@ const products = [
         price: 8.99,
         description: "Carne 100% de res, queso cheddar fundido, lechuga, tomate y salsa especial de la casa.",
         image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRWjVJXuQhhCwwvg049KMbTOXWiiLvKJyVuaIZ4uqK_e5igHDSH7C_3_AU&s=10"
-        
     },
     {
         id: 2,
@@ -75,12 +73,12 @@ const products = [
 let cart = [];
 let currentSelectedProduct = null;
 let currentModalQty = 1;
-let deliveryType = 'pickup'; // 'pickup' por defecto[cite: 11]
+let deliveryType = 'pickup';
 
 // --- VARIABLES PARA EL MAPA (LEAFLET) ---
 let map = null;
 let marker = null;
-let selectedLat = 10.1500; // Coordenadas de referencia o por defecto (puedes ajustarlas)
+let selectedLat = 10.1500;
 let selectedLng = -67.4167;
 
 // --- ELEMENTOS DEL DOM ---
@@ -140,7 +138,7 @@ function displayProducts(productsToDisplay) {
             </div>
             <div class="px-5 pb-5 flex items-center justify-between">
                 <span class="text-xl font-extrabold text-amber-600">$${product.price.toFixed(2)}</span>
-                <button onclick="openProductModal(${product.id})" class="bg-slate-900 hover:bg-slate-800 text-white font-medium px-4 py-2 rounded-xl text-sm flex items-center space-x-2 transition shadow">
+                <button onclick="handleQuickAdd(${product.id}, this)" class="bg-slate-900 hover:bg-slate-800 text-white font-medium px-4 py-2 rounded-xl text-sm flex items-center space-x-2 transition shadow">
                     <i class="fa-solid fa-cart-plus"></i>
                     <span>Agregar</span>
                 </button>
@@ -150,14 +148,30 @@ function displayProducts(productsToDisplay) {
     });
 }
 
+// --- EFECTO VISUAL Y SONIDO AL CLIC EN "AGREGAR" (DIRECTO DESDE LA TARJETA) ---
+function handleQuickAdd(productId, btnElement) {
+    playBeepSound(); // Suena el bip
+
+    // Animación visual de cambio de color a esmeralda
+    const originalBg = btnElement.className;
+    btnElement.className = "bg-emerald-600 text-white font-medium px-4 py-2 rounded-xl text-sm flex items-center space-x-2 transition shadow scale-95";
+    const originalHTML = btnElement.innerHTML;
+    btnElement.innerHTML = `<i class="fa-solid fa-check"></i><span>¡Listo!</span>`;
+
+    setTimeout(() => {
+        btnElement.className = "bg-slate-900 hover:bg-slate-800 text-white font-medium px-4 py-2 rounded-xl text-sm flex items-center space-x-2 transition shadow";
+        btnElement.innerHTML = originalHTML;
+    }, 500);
+
+    openProductModal(productId);
+}
+
 // --- CONFIGURAR EVENTOS ---
 function setupEventListeners() {
-    // Abrir y cerrar carrito
     openCartBtn.addEventListener('click', toggleCart);
     closeCartBtn.addEventListener('click', toggleCart);
     cartOverlay.addEventListener('click', toggleCart);
 
-    // Filtrar por categorías
     categoryButtons.forEach(button => {
         button.addEventListener('click', (e) => {
             categoryButtons.forEach(btn => btn.classList.remove('active', 'bg-amber-500', 'text-slate-900'));
@@ -176,7 +190,6 @@ function setupEventListeners() {
         });
     });
 
-    // Buscador en tiempo real
     searchInput.addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase();
         const filtered = products.filter(p => 
@@ -185,7 +198,6 @@ function setupEventListeners() {
         displayProducts(filtered);
     });
 
-    // Mostrar u ocultar datos de pago móvil según la selección
     const clientPaymentSelect = document.getElementById('clientPayment');
     const paymentDetailsContainer = document.getElementById('paymentDetailsContainer');
 
@@ -201,36 +213,52 @@ function setupEventListeners() {
         });
     }
 
-    // Enviar pedido por WhatsApp
     checkoutForm.addEventListener('submit', (e) => {
         e.preventDefault();
         sendOrderToWhatsApp();
     });
 }
 
-// --- ABRIR / CERRAR CARRITO ---
 function toggleCart() {
     cartDrawer.classList.toggle('hidden');
 }
 
-// --- CONTROL DE VENTANA MODAL DE CHECKOUT ---
+// --- IR AL CHECKOUT CON EFECTO Y SONIDO ---
 function openCheckoutModal() {
     if (cart.length === 0) {
         alert("Tu carrito está vacío.");
         return;
     }
-    // Sincronizar el total con el modal de checkout
-    document.getElementById('checkoutModalTotal').textContent = cartTotal.textContent;
-    document.getElementById('checkoutModal').classList.remove('hidden');
-    // Cerrar el panel lateral del carrito
-    toggleCart();
+
+    playBeepSound(); // Suena el bip
+
+    const checkoutBtn = event.currentTarget;
+    if (checkoutBtn) {
+        const originalClass = checkoutBtn.className;
+        const originalHTML = checkoutBtn.innerHTML;
+
+        checkoutBtn.className = "w-full bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition shadow-lg scale-95";
+        checkoutBtn.innerHTML = `<span>¡Cargando...</span><i class="fa-solid fa-check"></i>`;
+
+        setTimeout(() => {
+            checkoutBtn.className = originalClass;
+            checkoutBtn.innerHTML = originalHTML;
+
+            document.getElementById('checkoutModalTotal').textContent = cartTotal.textContent;
+            document.getElementById('checkoutModal').classList.remove('hidden');
+            toggleCart();
+        }, 400);
+    } else {
+        document.getElementById('checkoutModalTotal').textContent = cartTotal.textContent;
+        document.getElementById('checkoutModal').classList.remove('hidden');
+        toggleCart();
+    }
 }
 
 function closeCheckoutModal() {
     document.getElementById('checkoutModal').classList.add('hidden');
 }
 
-// --- GESTIÓN DE TIPO DE ENTREGA (PICK UP / DELIVERY) Y MAPA ---
 function setDeliveryType(type) {
     deliveryType = type;
     const btnPickup = document.getElementById('btnPickup');
@@ -238,25 +266,18 @@ function setDeliveryType(type) {
     const deliveryContainer = document.getElementById('deliveryContainer');
 
     if (type === 'pickup') {
-        // Estilo botón Pick Up activo
         btnPickup.className = "py-2.5 px-4 rounded-xl font-bold text-sm border-2 transition flex items-center justify-center space-x-2 bg-amber-500 text-slate-900 border-amber-500 shadow-sm";
-        // Estilo botón Delivery inactivo
         btnDelivery.className = "py-2.5 px-4 rounded-xl font-bold text-sm border-2 transition flex items-center justify-center space-x-2 bg-white text-slate-600 border-slate-200 hover:bg-slate-50 shadow-sm";
         
-        // Ocultar contenedor de dirección y mapa
         deliveryContainer.classList.add('hidden');
         document.getElementById('clientAddress').removeAttribute('required');
     } else {
-        // Estilo botón Delivery activo
         btnDelivery.className = "py-2.5 px-4 rounded-xl font-bold text-sm border-2 transition flex items-center justify-center space-x-2 bg-amber-500 text-slate-900 border-amber-500 shadow-sm";
-        // Estilo botón Pick Up inactivo
         btnPickup.className = "py-2.5 px-4 rounded-xl font-bold text-sm border-2 transition flex items-center justify-center space-x-2 bg-white text-slate-600 border-slate-200 hover:bg-slate-50 shadow-sm";
         
-        // Mostrar contenedor de dirección y mapa
         deliveryContainer.classList.remove('hidden');
         document.getElementById('clientAddress').setAttribute('required', 'true');
 
-        // Inicializar mapa de Leaflet si no se ha creado aún
         setTimeout(() => {
             initMap();
         }, 200);
@@ -285,7 +306,6 @@ function initMap() {
             selectedLng = position.lng;
         });
 
-        // Intentar obtener geolocalización del usuario si el navegador lo permite
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition((position) => {
                 selectedLat = position.coords.latitude;
@@ -301,19 +321,18 @@ function initMap() {
     }
 }
 
-// --- MODAL DE PRODUCTO (PERSONALIZACIÓN, NOTAS Y CANTIDAD) ---
 function openProductModal(productId) {
     const product = products.find(p => p.id === productId);
     if (!product) return;
 
     currentSelectedProduct = product;
-    currentModalQty = 1; // Reiniciar cantidad a 1
+    currentModalQty = 1;
 
     document.getElementById('modalProductImg').src = product.image;
     document.getElementById('modalProductName').textContent = product.name;
     document.getElementById('modalProductPrice').textContent = `$${product.price.toFixed(2)}`;
     document.getElementById('modalProductDesc').textContent = product.description || '';
-    document.getElementById('modalProductNotes').value = ''; // Limpiar notas previas
+    document.getElementById('modalProductNotes').value = '';
     document.getElementById('modalProductQty').textContent = currentModalQty;
 
     document.getElementById('productModal').classList.remove('hidden');
@@ -332,16 +351,22 @@ function adjustModalQuantity(change) {
     document.getElementById('modalProductQty').textContent = currentModalQty;
 }
 
+// --- AGREGAR AL CARRITO (DESDE EL MODAL) CON CAMBIO DE COLOR Y SONIDO ---
 function confirmAddToCart() {
     if (!currentSelectedProduct) return;
 
-    playBeepSound(); // Suena el bip de confirmación
+    playBeepSound(); // Suena el bip
+
+    const btnElement = event.currentTarget;
+    const originalClass = btnElement.className;
+    const originalHTML = btnElement.innerHTML;
+
+    // Cambiar a color esmeralda temporalmente
+    btnElement.className = "w-full bg-emerald-600 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg scale-95 flex items-center justify-center space-x-2";
+    btnElement.innerHTML = `<i class="fa-solid fa-check"></i><span>¡Agregado con éxito!</span>`;
 
     const notes = document.getElementById('modalProductNotes').value.trim();
-    
-    // Crear ID único combinando producto y notas para agrupar o separar según instrucciones
     const cartItemId = `${currentSelectedProduct.id}-${notes}`;
-    
     const existingItem = cart.find(item => item.cartItemId === cartItemId);
 
     if (existingItem) {
@@ -358,10 +383,14 @@ function confirmAddToCart() {
     }
 
     updateCartUI();
-    closeProductModal();
+
+    setTimeout(() => {
+        btnElement.className = originalClass;
+        btnElement.innerHTML = originalHTML;
+        closeProductModal();
+    }, 500);
 }
 
-// --- CAMBIAR CANTIDAD EN EL CARRITO ---
 function changeQuantity(cartItemId, change) {
     const itemIndex = cart.findIndex(item => item.cartItemId === cartItemId);
     if (itemIndex > -1) {
@@ -373,7 +402,6 @@ function changeQuantity(cartItemId, change) {
     updateCartUI();
 }
 
-// --- ACTUALIZAR LA VISTA DEL CARRITO ---
 function updateCartUI() {
     const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
     cartCount.textContent = totalItems;
@@ -411,7 +439,6 @@ function updateCartUI() {
     cartTotal.textContent = `$${totalPrice.toFixed(2)}`;
 }
 
-// --- CONTROL DE VENTANA MODAL DE PAGO MÓVIL ---
 function openPaymentModal() {
     const modal = document.getElementById('paymentModal');
     const modalTotalAmount = document.getElementById('modalTotalAmount');
@@ -425,9 +452,26 @@ function closePaymentModal() {
     modal.classList.add('hidden');
 }
 
-// --- ENVIAR PEDIDO A WHATSAPP ---
+function copyToClipboard(elementId, btnElement) {
+    const textToCopy = document.getElementById(elementId).innerText;
+
+    navigator.clipboard.writeText(textToCopy).then(() => {
+        const originalHTML = btnElement.innerHTML;
+        btnElement.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i>`;
+        btnElement.classList.add('border-emerald-400', 'bg-emerald-50');
+
+        setTimeout(() => {
+            btnElement.innerHTML = originalHTML;
+            btnElement.classList.remove('border-emerald-400', 'bg-emerald-50');
+        }, 2000);
+    }).catch(err => {
+        console.error('Error al copiar al portapapeles: ', err);
+        alert('No se pudo copiar el texto automáticamente.');
+    });
+}
+
 function sendOrderToWhatsApp() {
-    playOrderSound(); // Sonido de timbre de restaurante
+    playOrderSound();
 
     if (cart.length === 0) {
         alert("Tu carrito está vacío.");
@@ -500,11 +544,10 @@ function sendOrderToWhatsApp() {
 
     setTimeout(() => {
         window.open(whatsappURL, '_blank');
-        closeCheckoutModal(); // Cierra el modal de checkout al enviar
+        closeCheckoutModal();
     }, 400);
 }
 
-// --- FUNCIÓN DE AUDIO DIGITAL (BEEP) ---
 function playBeepSound() {
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -528,7 +571,6 @@ function playBeepSound() {
     }
 }
 
-// --- FUNCIÓN DE SONIDO LLAMATIVO (TIMBRE DE PEDIDO LISTO) ---
 function playOrderSound() {
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -565,7 +607,6 @@ function playOrderSound() {
     }
 }
 
-// --- ABRIR MODAL DE IMAGEN ---
 function openImageModal(imageSrc, productName) {
     const modal = document.getElementById('imageModal');
     const modalImage = document.getElementById('modalImage');
@@ -576,13 +617,11 @@ function openImageModal(imageSrc, productName) {
     modal.classList.remove('hidden');
 }
 
-// --- CERRAR MODAL DE IMAGEN ---
 function closeImageModal() {
     const modal = document.getElementById('imageModal');
     modal.classList.add('hidden');
 }
 
-// --- VERIFICAR SI EL LOCAL ESTÁ ABIERTO O CERRADO (5:00 PM A 11:00 PM) ---
 function checkStoreStatus() {
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
@@ -594,7 +633,6 @@ function checkStoreStatus() {
     const currentMinutes = now.getMinutes();
     
     const currentTimeInMinutes = currentHour * 60 + currentMinutes;
-    
     const openingTime = 17 * 60; 
     const closingTime = 23 * 60; 
 
@@ -609,23 +647,4 @@ function checkStoreStatus() {
         statusText.textContent = "Cerrado (Abre a las 5:00 PM)";
         statusText.className = "text-red-700 font-bold";
     }
-}
-// --- FUNCIÓN PARA COPIAR DATOS AL PORTAPAPELES ---
-function copyToClipboard(elementId, btnElement) {
-    const textToCopy = document.getElementById(elementId).innerText;
-
-    navigator.clipboard.writeText(textToCopy).then(() => {
-        // Cambiar icono temporalmente a un Check para indicar éxito
-        const originalHTML = btnElement.innerHTML;
-        btnElement.innerHTML = `<i class="fa-solid fa-check text-emerald-600"></i>`;
-        btnElement.classList.add('border-emerald-400', 'bg-emerald-50');
-
-        setTimeout(() => {
-            btnElement.innerHTML = originalHTML;
-            btnElement.classList.remove('border-emerald-400', 'bg-emerald-50');
-        }, 2000);
-    }).catch(err => {
-        console.error('Error al copiar al portapapeles: ', err);
-        alert('No se pudo copiar el texto automáticamente.');
-    });
 }
